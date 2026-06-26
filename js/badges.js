@@ -200,24 +200,28 @@ function renderEarnedBadgesRow(stats, container) {
 // نظام كشف الباجات الجديدة وعرض الـ popup
 // ==========================================================
 
-const EARNED_BADGES_KEY = 'earned_badges_v1';
-
-function getSavedBadges() {
-  try { return new Set(JSON.parse(localStorage.getItem(EARNED_BADGES_KEY) || '[]')); }
-  catch { return new Set(); }
+// جيب الباجات المحفوظة من Firestore
+async function getSavedBadgesFromDB(db, userId) {
+  try {
+    const snap = await db.collection('users').doc(userId).get();
+    const data = snap.exists ? snap.data() : {};
+    return new Set(data.earnedBadges || []);
+  } catch { return new Set(); }
 }
 
-function saveBadges(ids) {
-  localStorage.setItem(EARNED_BADGES_KEY, JSON.stringify([...ids]));
+// احفظ الباجات في Firestore
+async function saveBadgesToDB(db, userId, ids) {
+  try {
+    await db.collection('users').doc(userId).update({ earnedBadges: [...ids] });
+  } catch (err) { console.warn('فشل حفظ الباجات:', err); }
 }
 
 // قارن الباجات القديمة بالجديدة وارجع اللي اتفتحت حديثاً
-function detectNewBadges(stats) {
-  const saved   = getSavedBadges();
+async function detectNewBadges(stats, db, userId) {
+  const saved   = await getSavedBadgesFromDB(db, userId);
   const current = new Set(getEarnedBadges(stats).map(b => b.id));
   const newOnes = [...current].filter(id => !saved.has(id));
-  // احفظ الكل
-  saveBadges(current);
+  await saveBadgesToDB(db, userId, current);
   return newOnes.map(id => BADGES.find(b => b.id === id)).filter(Boolean);
 }
 
